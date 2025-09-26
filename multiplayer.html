@@ -1,22 +1,27 @@
+<!-- multiplayer.html (FULL file) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tic Tac Toe Squared - Multiplayer</title>
-  <link rel="stylesheet" href="multiplayer.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tic Tac Toe Squared — Multiplayer</title>
+  <link rel="stylesheet" href="multiplayer.css" />
+  <style>
+    /* small inline fallback if multiplayer.css missing — keep it readable */
+    body{background:#0f0f10;color:#fff;font-family:Inter,system-ui,Arial,sans-serif;margin:0}
+  </style>
 </head>
 <body>
   <div class="app">
-    <div id="statusText" class="status">Loading...</div>
-    <div id="board" class="board"></div>
+    <div id="statusText" class="turn">Loading game...</div>
+    <div id="board" class="board" aria-label="Game board"></div>
   </div>
 
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+  <!-- Firebase compat libraries (global `firebase`) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
-  <!-- Multiplayer script -->
-  <script type="module" src="multiplayer.js"></script>
+  <!-- multiplayer logic (drop-in) -->
+  <script src="multiplayer.js"></script>
 </body>
 </html>
