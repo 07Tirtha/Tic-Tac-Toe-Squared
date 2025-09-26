@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tic Tac Toe Squared</title>
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <div class="app">
+    <div class="title">
+      <h1>Tic Tac Toe Squared</h1>
+    </div>
+    <div class="menu">
+      <button id="playOfflineBtn">Play Offline</button>
+      <button id="createGameBtn">Create Game</button>
+      <button id="joinGameBtn">Join Game</button>
+    </div>
+  </div>
+
+  <!-- Create Game Modal -->
+  <div id="createGameModal" class="modal" aria-hidden="true">
+    <div class="modal-content">
+      <h2>Create Game</h2>
+      <input type="text" id="createName" placeholder="Enter your name">
+      <p id="roomCodeDisplay"></p>
+      <div class="modal-actions">
+        <button id="startGameBtn">Start Game</button>
+        <button id="cancelCreateBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Join Game Modal -->
+  <div id="joinGameModal" class="modal" aria-hidden="true">
+    <div class="modal-content">
+      <h2>Join Game</h2>
+      <input type="text" id="joinName" placeholder="Enter your name">
+      <input type="number" id="joinCode" placeholder="Enter 6-digit room code" maxlength="6">
+      <div class="modal-actions">
+        <button id="confirmJoinBtn">Join Game</button>
+        <button id="cancelJoinBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+
+  <!-- Main JS -->
+  <script type="module" src="index.js"></script>
+</body>
+</html>
