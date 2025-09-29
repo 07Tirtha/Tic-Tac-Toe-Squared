@@ -1,6 +1,6 @@
 /* multiplayer.js
    Firebase-powered multiplayer Tic Tac Toe Squared
-   Now includes console.log after room creation for debugging.
+   Full rules + status text (no modal).
 */
 
 (function(){
@@ -27,23 +27,23 @@
   const playerName = params.get('name') || ('Player' + (playerNum || ''));
 
   if (!roomCode || !playerNum) {
-    console.error("Missing ?room=XXXX&player=1|2&name=...");
     document.getElementById('statusText').textContent = "Invalid game link.";
-    throw new Error("Invalid URL params");
+    throw new Error("Missing ?room=XXXX&player=1|2&name=...");
   }
 
   // DOM refs
   const statusText = document.getElementById('statusText');
   const boardEl = document.getElementById('board');
 
-  // Local state
+  // State
   let boardState = new Array(81).fill('');
+  let smallBoards = [];
   let currentTurn = 'X';
   let mySymbol = playerNum === '1' ? 'X' : 'O';
   let started = false;
-  let playersJoined = 0;
   let winner = null;
-  let lastMove = null;
+  let lastMoveCell = null; // forced board index
+  let lastLatestGlobalIdx = null;
 
   const WIN = [
     [0,1,2],[3,4,5],[6,7,8],
@@ -54,6 +54,7 @@
   // Build DOM
   function buildBoardDOM(){
     boardEl.innerHTML = '';
+    smallBoards = [];
     for (let b = 0; b < 9; b++){
       const sb = document.createElement('div');
       sb.className = 'small-board';
@@ -68,6 +69,7 @@
         sb.appendChild(cell);
       }
       boardEl.appendChild(sb);
+      smallBoards.push(sb);
     }
   }
   buildBoardDOM();
@@ -91,29 +93,18 @@
           winner: null
         };
         await roomRef.set(initial);
-        console.log("✅ Room created in Firebase:", roomCode, "by", playerName); // NEW DEBUG LOG
+        console.log("✅ Room created:", roomCode);
       } else {
-        alert("Room not found. Ask the host for a valid room code.");
         statusText.textContent = "Room not found.";
         throw new Error("Room not found");
       }
     } else {
       const data = snapshot.val();
-      if (playerNum === '1') {
-        if (!data.player1 || data.player1 !== playerName) {
-          const updates = { player1: playerName };
-          const numPlayers = (!!data.player1 ? 1 : 0) + (!!data.player2 ? 1 : 0);
-          updates.playersJoined = Math.max(1, numPlayers);
-          await roomRef.update(updates);
-        }
-      } else {
-        if (!data.player2) {
-          await roomRef.update({
-            player2: playerName,
-            playersJoined: ((data.player1 ? 1 : 0) + 1)
-          });
-          console.log("Player2 joined room:", roomCode);
-        }
+      if (playerNum === '1' && !data.player1) {
+        await roomRef.update({ player1: playerName });
+      } else if (playerNum === '2' && !data.player2) {
+        await roomRef.update({ player2: playerName, playersJoined: 2 });
+        console.log("Player2 joined:", roomCode);
       }
     }
   }
@@ -127,19 +118,15 @@
       return;
     }
 
-    boardState = Array.isArray(data.board) && data.board.length === 81 ? data.board.slice() : new Array(81).fill('');
+    boardState = Array.isArray(data.board) ? data.board.slice() : new Array(81).fill('');
     currentTurn = data.turn || 'X';
-    playersJoined = Number(data.playersJoined) || ((data.player1?1:0) + (data.player2?1:0));
     started = !!data.started;
     winner = data.winner || null;
-    lastMove = (typeof data.lastMove !== 'undefined') ? data.lastMove : null;
+    lastLatestGlobalIdx = data.lastMove ?? null;
+    lastMoveCell = (lastLatestGlobalIdx !== null) ? (lastLatestGlobalIdx % 9) : null;
 
-    if (data.player1 && data.player2 && (!data.playersJoined || data.playersJoined !== 2 || !data.started)) {
-      roomRef.update({
-        playersJoined: 2,
-        started: true,
-        turn: data.turn || 'X'
-      }).catch(e => console.warn("start flags update failed:", e));
+    if (data.player1 && data.player2 && !started) {
+      roomRef.update({ playersJoined: 2, started: true }).catch(e => console.warn(e));
       return;
     }
 
@@ -148,7 +135,8 @@
       disableAllCells();
     } else {
       updateStatusText();
-      renderBoard();
+      renderFullBoard();
+      updateAvailableBoards(lastMoveCell);
       highlightLastMove();
     }
 
@@ -169,84 +157,107 @@
     }
   }
 
-  function renderBoard(){
-    for (let i = 0; i < 81; i++){
-      const val = boardState[i] || '';
-      const el = boardEl.querySelector(`[data-index='${i}']`);
-      if (!el) continue;
-      el.textContent = val || '';
-      el.classList.remove('x','o','taken','latest');
-      if (val) {
-        el.classList.add('taken');
-        el.classList.add(val.toLowerCase());
+  function renderFullBoard(){
+    for (let b=0;b<9;b++){
+      for (let c=0;c<9;c++){
+        const idx = b*9+c;
+        const val = boardState[idx];
+        const sb = smallBoards[b];
+        if (!sb) continue;
+        const cell = sb.querySelector(`.cell[data-cell='${c}']`);
+        if (!cell) continue;
+        cell.textContent = val || "";
+        cell.classList.toggle("taken", !!val);
+        cell.classList.remove("x","o","latest");
+        if (val) cell.classList.add(val.toLowerCase());
       }
+      if (isSmallBoardWinFromState(b)) smallBoards[b].classList.add("won");
+      else smallBoards[b].classList.remove("won");
     }
   }
 
   function highlightLastMove(){
-    if (lastMove === null || typeof lastMove === 'undefined') return;
-    const el = boardEl.querySelector(`[data-index='${lastMove}']`);
-    if (!el) return;
+    if (lastLatestGlobalIdx === null) return;
     boardEl.querySelectorAll('.latest').forEach(n => n.classList.remove('latest'));
-    el.classList.add('latest');
+    const el = boardEl.querySelector(`[data-index='${lastLatestGlobalIdx}']`);
+    if (el) el.classList.add('latest');
   }
 
   function disableAllCells(){
     boardEl.querySelectorAll('.cell').forEach(c => c.classList.add('taken'));
   }
 
+  // ---- Rules ----
+  function isSmallBoardWinFromState(boardIdx){
+    const offset = boardIdx * 9;
+    const slice = boardState.slice(offset, offset + 9);
+    return WIN.some(([a,b,c]) => slice[a] && slice[a] === slice[b] && slice[a] === slice[c]);
+  }
+  function isSmallBoardFull(boardIdx){
+    const offset = boardIdx * 9;
+    return boardState.slice(offset, offset+9).every(v => v);
+  }
+
+  function updateAvailableBoards(nextIdx){
+    smallBoards.forEach(s => { s.classList.remove("available","initial","inactive"); });
+    if (nextIdx === null || nextIdx === undefined) {
+      smallBoards.forEach((s,i) => {
+        if (!isSmallBoardWinFromState(i) && !isSmallBoardFull(i)) s.classList.add("available","initial");
+        else s.classList.add("inactive");
+      });
+      return;
+    }
+    if (isSmallBoardWinFromState(nextIdx) || isSmallBoardFull(nextIdx)) {
+      smallBoards.forEach((s,i) => {
+        if (!isSmallBoardWinFromState(i) && !isSmallBoardFull(i)) s.classList.add("available");
+        else s.classList.add("inactive");
+      });
+    } else {
+      smallBoards.forEach((s,i) => {
+        if (i === nextIdx) s.classList.add("available");
+        else s.classList.add("inactive");
+      });
+    }
+  }
+
   function onCellClick(boardIdx, cellIdx){
     const globalIdx = boardIdx * 9 + cellIdx;
     if (!started || winner || currentTurn !== mySymbol || boardState[globalIdx]) return;
 
+    // forced-board rule
+    if (lastMoveCell !== null){
+      const forcedIdx = lastMoveCell;
+      if (!isSmallBoardWinFromState(forcedIdx) && !isSmallBoardFull(forcedIdx) && boardIdx !== forcedIdx) {
+        return; // illegal move
+      }
+    }
+
+    // apply locally
     boardState[globalIdx] = mySymbol;
+    lastLatestGlobalIdx = globalIdx;
+    lastMoveCell = cellIdx;
 
-    const boardIdx2 = Math.floor(globalIdx / 9);
-    const winnerSmall = checkSmallBoardWin(boardState, boardIdx2);
     const nextTurn = (mySymbol === 'X') ? 'O' : 'X';
-
     const updates = {
       board: boardState,
       turn: nextTurn,
       lastMove: globalIdx
     };
 
-    if (winnerSmall) {
-      updates.winner = winnerSmall;
+    // check win/draw
+    if (isSmallBoardWinFromState(boardIdx)) {
+      updates.winner = mySymbol;
       updates.started = false;
-      console.log("Small board win detected:", winnerSmall);
-    } else {
-      const full = boardState.every(v => v && v !== '');
-      if (full) {
-        updates.winner = 'draw';
-        updates.started = false;
-      }
+    } else if (boardState.every(v => v)) {
+      updates.winner = 'draw';
+      updates.started = false;
     }
 
-    roomRef.update(updates).catch(err => {
-      console.error("Failed to write move:", err);
-    });
+    roomRef.update(updates).catch(err => console.error("Failed to write move:", err));
   }
-
-  function checkSmallBoardWin(boardArr, smallIndex){
-    const offset = smallIndex * 9;
-    const slice = boardArr.slice(offset, offset + 9);
-    for (const [a,b,c] of WIN) {
-      if (slice[a] && slice[a] === slice[b] && slice[a] === slice[c]) {
-        return slice[a];
-      }
-    }
-    return null;
-  }
-
-  function debugLogRoom(){
-    roomRef.get().then(snap => console.log("Room snapshot:", snap.val()));
-  }
-  window.ttt_debugRoom = debugLogRoom;
 
   statusText.textContent = "Connecting...";
-  renderBoard();
+  renderFullBoard();
 
   console.log("multiplayer.js loaded — room:", roomCode, "you:", playerName, "as", mySymbol);
-
-})(); 
+})();
